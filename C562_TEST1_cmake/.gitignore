@@ -8,10 +8,9 @@ build/
 *.obj
 *.su
 
-# IDE
+# IDE / Editor
 .idea/
-.metadata/
-.settings/
+.vscode/
 *.swp
 *.swo
 *~
@@ -25,3 +24,4 @@ Thumbs.db
 *.ioc.bak
 .clangd
 .claude/
+.settings/
