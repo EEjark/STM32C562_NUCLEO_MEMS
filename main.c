@@ -16,7 +16,8 @@
 
 int main(void)
 {
-  if (mx_system_init() != SYSTEM_OK) { for (;;); }
+  if (mx_system_init() != SYSTEM_OK)
+   { for (;;); }
 
   MEMS_Init();               /* Phase 1 — all HW init + protocol state */
 
