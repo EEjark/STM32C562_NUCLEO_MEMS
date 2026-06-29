@@ -1,0 +1,98 @@
+mindmap
+  root（STM32C5A3VET6 工业物联网开发板原理图）
+    1. 核心主控 STM32C5A3VET6
+      ：：icon（fa fa-microchip）
+      （Cortex-M33 / 144MHz / 1MB Flash）
+      电源系统
+        VDD/VDDA 接 3.3V
+        每引脚并联 0.1μF + 10μF 去耦
+      复位电路
+        NRST 接 10kΩ 上拉
+        对地并 0.1μF 电容
+      时钟源
+        HSE：25MHz 晶振（主频）
+        LSE：32.768kHz 晶振（RTC）
+      调试接口
+        SWD：SWCLK + SWDIO
+        （预留 3.3V / GND）
+    2. EtherCAT 从站模块
+      ：：icon（fa fa-network-wired）
+      LAN9252（从站控制器）
+        通信接口（SPI）
+          CS  -> GPIO（如 PA4）
+          SCK -> PA5（SPI1）
+          MOSI -> PA7
+          MISO -> PA6
+          IRQ -> GPIO（外部中断）
+          RESET_N -> GPIO
+        电源：VDD33 接 3.3V
+        内部 1.2V LDO：REG_EN 接高使能
+      LAN8742（物理层 PHY）
+        RMII 接口（连接 LAN9252）
+          TXD[0:1] / RXD[0:1]
+          TX_EN / CRS_DV
+          REF_CLK（50MHz 共用时钟）
+        管理接口（MDC / MDIO）
+          MDIO 需 1.5kΩ 上拉
+        模拟电源
+          VDD1A/VDD2A 经磁珠隔离滤波
+        网络接口
+          TXP/TXN 差分对 -> RJ45
+          需集成网络变压器（100Ω阻抗）
+      时钟策略
+        LAN9252 与 LAN8742 共用 50MHz 有源晶振
+        （晶振放置于两者中间，走线等长）
+    3. LCD 显示模块
+      ：：icon（fa fa-desktop）
+      ST7789 驱动芯片（240x320）
+        SPI 通信接口
+          SCK -> PB13（SPI2）
+          MOSI -> PB15
+          DC（数据/命令）-> GPIO
+          CS（片选）-> GPIO
+          RES（复位）-> GPIO
+        背光控制
+          LEDA 接 3.3V
+          LEDK 接 PWM 调光 GPIO
+        电源：VDD 接 3.3V + 0.1μF 去耦
+    4. 传感器模块
+      ：：icon（fa fa-microchip）
+      ISM330DHCX（六轴 IMU）
+        通信：I2C1（PB6-SCL / PB7-SDA）
+        地址选择：SA0 接 GND（0x6A）或 VDD（0x6B）
+        中断：INT1 / INT2 接 GPIO
+        电源：VDD / VDDIO 接 3.3V
+      STTS22H（温度传感器）
+        通信：I2C1（与 IMU 共用总线）
+        地址选择：ADDR 接 GND（0x7E）或 VDD（0x70）
+        中断：ALERT 开漏输出 -> GPIO（需上拉）
+      总线设计
+        I2C 总线需 4.7kΩ 上拉至 3.3V
+        （两器件地址不同，可安全共用）
+    5. 电源分配网络（PDN）
+      ：：icon（fa fa-bolt）
+      输入电源：USB 5V / DC 5V
+      核心 LDO：3.3V（输出能力 ≥ 1A）
+        （推荐 AMS1117-3.3 或 高效 DCDC）
+      电源分支
+        数字 3.3V
+          STM32C5 / LAN9252 / ST7789
+          传感器（ISM330 / STTS22H）
+        模拟 3.3V（磁珠隔离）
+          LAN8742 模拟端（VDD1A/VDD2A）
+      去耦策略
+        各 IC 电源引脚就近放置 0.1μF
+        总电源入口放置 10μF~100μF 大电容
+    6. 设计检查清单与接口
+      ：：icon（fa fa-check-circle）
+      关键外围预留
+        用户按键（GPIO 输入）
+        状态 LED（GPIO 输出）
+        扩展排针（引出未用 SPI/UART/GPIO）
+      布局走线要点
+        模块化分页绘制（电源/数字/模拟）
+        RMII 时钟线与数据线等长约束
+        RJ45 差分对 100Ω 阻抗控制
+      固件烧录注意
+        BOOT0 接 GND（正常启动）
+        或预留跳线帽供串口 ISP 下载

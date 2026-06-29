@@ -1,0 +1,27 @@
+# Build output
+build/
+*.elf
+*.map
+*.bin
+*.hex
+*.o
+*.obj
+*.su
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CubeMX backup / temp
+*.base@*
+*.ioc.bak
+.clangd
+.claude/
+.settings/
