@@ -1,20 +1,16 @@
 # C562 + ISM330DHCX 兼容 MEMSStudio 开发笔记
 
-> C562 + ISM330DHCX Compatible with MEMSStudio — Development Notes
-
 ---
 
-## 1. Overview / 概述
+## 1. 概述
 
 本文档记录如何基于 **STM32C562RET6** + **ISM330DHCX** 实现与 **MEMSStudio**（原 Unicleo-GUI）的串口协议兼容，使其能够自动发现设备并实时显示六轴传感器数据。
 
 本文涵盖协议分析、帧格式定义、命令处理流程，以及实际调试中的关键细节。
 
-> This document describes how to implement MEMSStudio-compatible serial protocol on STM32C562RET6 with ISM330DHCX, enabling auto-discovery and real-time 6-axis sensor data visualization.
-
 ---
 
-## 2. Hardware Architecture / 硬件架构
+## 2. 硬件架构
 
 ```
 +------------------+       USART2 (115200 bps)       +------------------+
@@ -28,7 +24,7 @@
 +------------------+
 ```
 
-| Pin / 引脚 | Connection / 连接 | 说明 |
+| 引脚 | 连接 | 说明 |
 |---|---|---|
 | PA2 (TX) | ST-Link TX → PC | USART2 发送 |
 | PA3 (RX) | ST-Link RX ← PC | USART2 接收 |
@@ -36,11 +32,11 @@
 | PB7 (SDA) | ISM330DHCX SDA | I2C1 数据 |
 | 3V3 / GND | ISM330DHCX VCC/GND | 电源 |
 
-> **Note / 注意:** ISM330DHCX 的 I2C 地址为 `0x6B`（`ISM330DHCX_I2C_ADD_H`），接法为 SA0 悬空（默认高）。
+> **注意:** ISM330DHCX 的 I2C 地址为 `0x6B`（`ISM330DHCX_I2C_ADD_H`），接法为 SA0 悬空（默认高）。
 
 ---
 
-## 3. Serial Protocol Overview / 串口协议概述
+## 3. 串口协议概述
 
 MEMSStudio 使用 ST 私有的 **DataLogFusion** 串行协议，核心特性：
 
@@ -49,16 +45,14 @@ MEMSStudio 使用 ST 私有的 **DataLogFusion** 串行协议，核心特性：
 3. **命令-响应模式** — PC 发命令，MCU 回复
 4. **主动数据流** — MCU 周期性主动上报传感器数据
 
-> MEMSStudio uses ST's proprietary **DataLogFusion** serial protocol with byte-stuffing, checksum validation, command-response mode, and主动上报 (MCU-initiated streaming).
-
-### 3.1 Frame Structure / 帧结构
+### 3.1 帧结构
 
 ```
 [DestAddr][SrcAddr][CMD][Payload...][CheckSum][0xF0]
    1B       1B      1B     N B        1B       1B
 ```
 
-| Field / 字段 | Size / 大小 | Description / 描述 |
+| 字段 | 大小 | 描述 |
 |---|---|---|
 | `DestAddr` | 1 byte | 目标地址（MCU 地址 = `DEV_ADDR`） |
 | `SrcAddr` | 1 byte | 源地址（PC = `0x00`） |
@@ -67,7 +61,7 @@ MEMSStudio 使用 ST 私有的 **DataLogFusion** 串行协议，核心特性：
 | `CheckSum` | 1 byte | 校验和（`sum(Data) == 0`） |
 | `0xF0` | 1 byte | 帧结束标记（`Msg_EOF`） |
 
-### 3.2 Byte-Stuffing Rules / 字节填充规则
+### 3.2 字节填充规则
 
 | 原字符 | 编码后 | 说明 |
 |---|---|---|
@@ -77,9 +71,7 @@ MEMSStudio 使用 ST 私有的 **DataLogFusion** 串行协议，核心特性：
 
 解码时：遇到 `0xF1` 则读取下一字节，`0xF2` → `0xF0`，`0xF1` → `0xF1`。
 
-> Encoding: `0xF0` → `0xF1 0xF2`, `0xF1` → `0xF1 0xF1`. Decoding reverses this.
-
-### 3.3 CheckSum / 校验和
+### 3.3 校验和
 
 发送端：对所有数据字节（含 DestAddr/SrcAddr/CMD/Payload）做 **按位取反累加**：
 ```c
@@ -89,13 +81,11 @@ for (i = 0; i < len; i++) chk -= Data[i];
 
 接收端：验证 `Σ Data[i] + CheckSum == 0`（即校验和不为零错误）。
 
-> Sending: `chk -= Data[i]` for each byte. Receiving: verify `sum + checksum == 0`.
-
 ---
 
-## 4. Command Codes / 命令码
+## 4. 命令码
 
-| CMD Name | Value | Direction | Description / 描述 |
+| CMD 名称 | 值 | 方向 | 描述 |
 |---|---|---|---|
 | `CMD_Ping` | `0x01` | PC→MCU | 心跳请求，MCU 回复 Pong |
 | `CMD_Read_PresString` | `0x02` | PC→MCU | 读取设备描述字符串 |
@@ -104,13 +94,11 @@ for (i = 0; i < len; i++) chk -= Data[i];
 | `CMD_ChangeSF` | `0x07` | PC→MCU | 切换 6轴/9轴 融合模式 |
 | `CMD_ACCELERO_GYRO_Init` | `0x76` | PC→MCU | 初始化 Acc+Gyro，MCU 回复传感器 ID |
 | `CMD_Get_App_Info` | `0x12` | PC→MCU | 获取算法频率、数据需求信息 |
-| Reply flag / 回复标志 | `0x80` | MCU→PC | 回复时 CMD = 原 CMD \| 0x80 |
-
-> All commands from PC get replied by MCU with the MSB set (`CMD | 0x80`).
+| 回复标志 | `0x80` | MCU→PC | 回复时 CMD = 原 CMD \| 0x80 |
 
 ---
 
-## 5. Handshake Sequence / 握手流程
+## 5. 握手流程
 
 完整 MEMSStudio 连接握手顺序：
 
@@ -124,28 +112,28 @@ MEMSStudio (PC)                          MCU (C562)
      | <------- "MEMS shield demo..." (0x82) |
      |                                        |
      | -------- ACCELERO_GYRO_Init (0x76) ->  |
-     | <------- UNICLEO_ID = 11 (0xF6) ----- |
+     | <------- UNICLEO_ID = 11 (0xF6) -----  |
      |                                        |
      | -------- Get_App_Info (0x12) ------->  |
-     | <------- AlgoFreq=100Hz (0x92) ------ |
+     | <------- AlgoFreq=100Hz (0x92) ------  |
      |                                        |
      | -------- Start_Data_Streaming (0x08) ->|
-     | <------- ACK (0x88) ----------------- |
+     | <------- ACK (0x88) -----------------  |
      |                                        |
      | <====== 100Hz ACC+GYR data stream === |
 ```
 
-> The handshake is deterministic — if any step fails, MEMSStudio will not start streaming.
+> 握手流程是确定性的——任意一步失败，MEMSStudio 将无法开始数据流。
 
 ---
 
-## 6. Data Streaming Format / 数据流格式
+## 6. 数据流格式
 
-### 6.1 Minimal Format (ACC+GYR Only) / 精简格式（仅 ACC+GYR）
+### 6.1 精简格式（仅 ACC+GYR）
 
 当前 C562_TEST1 使用 24 字节有效载荷：
 
-| Offset / 偏移 | Size / 大小 | Field | Unit / 单位 | Type |
+| 偏移 | 大小 | 字段 | 单位 | 类型 |
 |---|---|---|---|---|
 | 3 | 4 | ACC_X | mg | int32 |
 | 7 | 4 | ACC_Y | mg | int32 |
@@ -156,11 +144,11 @@ MEMSStudio (PC)                          MCU (C562)
 
 总帧长：Header(3) + Payload(24) + CheckSum(1) + EOF(1) = **29 字节**
 
-### 6.2 Full Format (DataLogFusion 119 bytes) / 完整格式（119 字节）
+### 6.2 完整格式（119 字节）
 
 如果启用 MotionFX 融合算法，需扩展至完整 119 字节：
 
-| Offset | Size | Field | Unit | Description |
+| 偏移 | 大小 | 字段 | 单位 | 描述 |
 |---|---|---|---|---|
 | 0–2 | 3 | Header | — | Dest=0x00, Src=DEV_ADDR, CMD=0x08 |
 | 3–6 | 4 | RTC time | — | 无 RTC 时为 0 |
@@ -182,9 +170,9 @@ MEMSStudio (PC)                          MCU (C562)
 
 ---
 
-## 7. Key Implementation Details / 关键实现细节
+## 7. 关键实现细节
 
-### 7.1 ISM330DHCX Initialization / 传感器初始化
+### 7.1 传感器初始化
 
 ```c
 /* I2C address: 0x6B (SA0 floating) */
@@ -201,7 +189,7 @@ BSP_SENSOR_ACC_Enable();
 BSP_SENSOR_GYR_Enable();
 ```
 
-### 7.2 UART Receive (IDLE Line Detection) / UART 接收（IDLE 线检测）
+### 7.2 UART 接收（IDLE 线检测）
 
 C562_TEST1 使用 `HAL_UART_ReceiveToIdle_IT`（IDLE 中断）检测帧边界，而非 DMA 环形缓冲：
 
@@ -221,7 +209,7 @@ void Com_StartReceive(void) {
 }
 ```
 
-### 7.3 Command Dispatch / 命令分发
+### 7.3 命令分发
 
 ```c
 /* app_mems_protocol.c */
@@ -239,7 +227,7 @@ int32_t MEMS_HandleCommand(Msg_t *msg)
 }
 ```
 
-### 7.4 Building the Streaming Frame / 构建流帧
+### 7.4 构建流帧
 
 ```c
 /* 24-byte ACC+GYR frame */
@@ -276,9 +264,9 @@ void MEMS_SendStreamingFrame(MOTION_SENSOR_Axes_t *acc,
 
 ---
 
-## 8. Common Issues & Debug / 常见问题与调试
+## 8. 常见问题与调试
 
-| Issue / 问题 | Likely Cause / 可能原因 | Solution / 解决方案 |
+| 问题 | 可能原因 | 解决方案 |
 |---|---|---|
 | MEMSStudio 不识别设备 | 握手顺序不对或超时 | 检查 PING/PONG 是否正常，串口波形是否正确 |
 | 数据乱码或帧解析错误 | 波特率不匹配（应为 115200） | 确认 PC 端 COM 端口设置 |
@@ -287,7 +275,7 @@ void MEMS_SendStreamingFrame(MOTION_SENSOR_Axes_t *acc,
 | 传感器数据全零 | I2C 通信失败或 ISM330DHCX 未使能 | 检查 WHO_AM_I (0x0F = 0x6B)，确认 SDA/SCL 上拉电阻 |
 | 数据流只有一帧 | Start 命令未正确回复 ACK | 确认 `CMD | 0x80` 回复格式 |
 
-### 8.1 Debug with Logic Analyzer / 逻辑分析仪调试
+### 8.1 逻辑分析仪调试
 
 推荐使用 Saleae 或类似工具抓取 UART 波形，关键观察点：
 
@@ -295,13 +283,13 @@ void MEMS_SendStreamingFrame(MOTION_SENSOR_Axes_t *acc,
 2. **帧尾 0xF0** — 每个回复帧是否以 `0xF0` 结尾
 3. **字节填充** — Payload 中出现 `0xF0` 时是否被正确替换为 `0xF1 0xF2`
 
-> For protocol debugging, a logic analyzer capturing the UART TX/RX lines is essential. Check for correct PING→PONG, proper EOF marker (0xF0), and correct byte-stuffing.
+> 协议调试建议使用逻辑分析仪同时抓取 UART TX/RX 两路波形，检查 PING→PONG 时序、帧尾 0xF0 标记以及字节填充是否正确。
 
 ---
 
-## 9. File Reference / 相关文件索引
+## 9. 相关文件索引
 
-| File / 文件 | Role / 职责 |
+| 文件 | 职责 |
 |---|---|
 | `App/app_mems_protocol.c/h` | MEMSStudio 协议处理、流帧构建 |
 | `App/mems_control.c/h` | BSP 适配层：`BSP_SENSOR_*` API |
@@ -314,9 +302,9 @@ void MEMS_SendStreamingFrame(MOTION_SENSOR_Axes_t *acc,
 
 ---
 
-## 10. Summary / 总结
+## 10. 总结
 
-| Item / 项目 | Status / 状态 | Notes / 备注 |
+| 项目 | 状态 | 说明 |
 |---|---|---|
 | PING/PONG | ✅ | 0x01 ↔ 0x81 |
 | PresString | ✅ | 设备描述字符串 |
@@ -329,5 +317,3 @@ void MEMS_SendStreamingFrame(MOTION_SENSOR_Axes_t *acc,
 | DMA TX | ❌ | 当前为阻塞发送 |
 
 C562_TEST1 已完整实现 MEMSStudio 兼容的 ACC+GYR 数据流功能，代码结构清晰（App/Middleware/Driver 三层分离），适合作为 MEMSStudio 协议移植的参考起点。
-
-> C562_TEST1 implements a complete MEMSStudio-compatible ACC+GYR streaming protocol. The clean three-layer architecture (App / Middleware / Driver) makes it a solid reference for ST sensor protocol porting projects.
